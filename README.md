@@ -484,6 +484,10 @@ For issues in upstream CloakBrowser: https://github.com/CloakHQ/CloakBrowser/sec
 
 ## Changelog
 
+### [0.1.5] - 2026-10-09
+
+- **fix(storage)**: hardened `browser_set_storage_state` against unhandled evaluation errors and timeouts. Per-origin restore is now isolated: `goto` uses a 15 s `domcontentloaded` timeout, `localStorage` writes are wrapped per-key (quota, sandboxing and security errors are ignored), and the page is closed in a `finally` block. One failing origin no longer aborts restoring the remaining origins.
+
 ### [0.1.2] - 2026-08-03
 
 - No behaviour change. Release-pipeline only: publishes via **npm trusted publishing (OIDC)** instead of an `NPM_TOKEN` secret. A long-lived token expires silently, and npm answers an unauthorized publish with `404 Not Found - PUT` — which reads like a missing package rather than an auth failure. OIDC has nothing to expire.
