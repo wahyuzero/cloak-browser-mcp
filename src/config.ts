@@ -15,6 +15,7 @@ export interface ServerConfig {
   geoip: boolean;
   humanize: boolean;
   fingerprintSeed?: number;
+  fingerprintPlatform?: string;
   allowedDomains: string[];
   blockedDomains: string[];
   enableUnsafeEval: boolean;
@@ -113,6 +114,10 @@ export function parseArgs(argv: string[]): ServerConfig {
         cfg.fingerprintSeed = Number.parseInt(takeValue(argv, i, a), 10);
         i++;
         break;
+      case "--fingerprint-platform":
+        cfg.fingerprintPlatform = takeValue(argv, i, a).toLowerCase();
+        i++;
+        break;
       case "--allowed-domains":
         cfg.allowedDomains = takeValue(argv, i, a).split(",").map((s) => s.trim()).filter(Boolean);
         i++;
@@ -175,6 +180,7 @@ Flags:
   --geoip                    Auto geolocation/timezone/locale from proxy exit IP
   --humanize                 Enable humanized mouse/keyboard inputs
   --fingerprint-seed <int>   Deterministic canvas/WebGL seed
+  --fingerprint-platform <p> Launch-time platform fingerprint: windows|macos|linux|android|chromeos
   --allowed-domains <csv>    browser_navigate allow-list
   --blocked-domains <csv>    browser_navigate block-list
   --enable-unsafe-eval       Required (in addition to --caps config) to expose browser_run_code_unsafe
