@@ -28,7 +28,11 @@ export interface ImageContent {
 }
 
 export function textOutput(text: string): ToolOutput {
-  return { content: [{ type: "text", text }] };
+  // BUG-1 hardening: `text` must ALWAYS be a string — a non-string (e.g.
+  // undefined from JSON.stringify of a non-serializable value) produces a
+  // content entry that fails MCP schema validation on spec-compliant clients
+  // ("content[0] invalid_union / expected string").
+  return { content: [{ type: "text", text: typeof text === "string" ? text : String(text) }] };
 }
 
 export function imageOutput(base64: string, mimeType = "image/png", caption?: string): ToolOutput {

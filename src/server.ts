@@ -5,9 +5,21 @@ import type { ServerConfig } from "./config.js";
 import { CloakError } from "./errors.js";
 import { collectTools } from "./tools/index.js";
 import type { ToolOutput } from "./tools/types.js";
+import { fingerprintOverrideScript, uaForPlatform, applyUaOverride } from "./util/fingerprint.js";
 
 export function createServer(cfg: ServerConfig): { server: McpServer; session: BrowserSession } {
   const session = new BrowserSession(cfg);
+  // BUG-3 fix: apply the launch-time platform fingerprint (CLI
+  // --fingerprint-platform) as a runtime UA override right after launch —
+  // compiled-in Chromium flags alone don't change the UA string on Android.
+  if (cfg.fingerprintPlatform) {
+    session.onLaunched(async (ctx, uaHint) => {
+      const ua = uaForPlatform(uaHint, cfg.fingerprintPlatform!);
+      if (!ua) return;
+      await ctx.addInitScript(fingerprintOverrideScript(cfg.fingerprintPlatform!, ua));
+      await applyUaOverride(ctx.pages(), ua, cfg.fingerprintPlatform!);
+    });
+  }
   const tools = collectTools(cfg);
 
   const server = new McpServer(

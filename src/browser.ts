@@ -69,6 +69,12 @@ export class BrowserSession {
   private activeRoutes = new Map<string, RouteRule>();
   readonly refs = new RefRegistry();
   private launching?: Promise<void>;
+  /** Hooks run after each (re)launch with the fresh context — used for launch-time fingerprint overrides. */
+  private launchedHooks: Array<(ctx: any, uaHint: string) => Promise<void>> = [];
+
+  onLaunched(hook: (ctx: any, uaHint: string) => Promise<void>): void {
+    this.launchedHooks.push(hook);
+  }
   private lastLaunchError?: unknown;
   private offline = false;
 
@@ -128,7 +134,17 @@ export class BrowserSession {
     this.context.on("page", (p) => this.attachPage(p));
     if (this.context.pages().length > 0) {
       for (const p of this.context.pages()) this.attachPage(p);
-    } else {
+    }
+    // Run launch-time fingerprint hooks (BUG-3). Best-effort: failures here
+    // must never prevent the session from starting.
+    if (this.launchedHooks.length) {
+      const ctx = this.context;
+      const uaHint: string = await ctx.pages()[0]?.evaluate(() => navigator.userAgent).catch(() => "") ?? "";
+      for (const hook of this.launchedHooks) {
+        await hook(ctx, uaHint).catch(() => {});
+      }
+    }
+    if (this.context.pages().length === 0) {
       const first = await this.context.newPage();
       this.attachPage(first);
     }

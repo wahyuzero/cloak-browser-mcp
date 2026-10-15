@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ToolHandler } from "./types.js";
 import { textOutput } from "./types.js";
+import { fingerprintOverrideScript, uaForPlatform, applyUaOverride } from "../util/fingerprint.js";
 
 const fingerprintSchema = z.object({
   seed: z.number().optional().describe("Deterministic canvas/WebGL/audio seed."),
@@ -48,6 +49,24 @@ export const cloakStealthTools: ToolHandler[] = [
       if (args.platform) {
         init.push(`Object.defineProperty(navigator,'platform',{get:()=>${JSON.stringify(args.platform)}});`);
       }
+      // BUG-3 fix: overriding navigator.platform alone never changes the UA
+      // string, which made "appliedRuntime: 1" misleading. Build a real UA for
+      // the requested platform and apply it (a) via CDP to already-open pages
+      // and (b) via init script to every future document.
+      let uaNotice = "";
+      if (args.platform) {
+        const page = session.activePage;
+        const currentUA = await page.evaluate(() => navigator.userAgent).catch(() => "") || "";
+        const ua = uaForPlatform(currentUA, args.platform);
+        if (ua) {
+          await ctx.addInitScript(fingerprintOverrideScript(args.platform, ua));
+          await applyUaOverride(ctx.pages(), ua, args.platform);
+          init.push("(userAgent override)");
+          uaNotice = ` UA override active: "${ua}". Applied via CDP to open pages and via init script to future navigations.`;
+        } else {
+          uaNotice = ` Unknown platform "${args.platform}" — UA not overridden (supported: windows, macos, linux, android, chromeos).`;
+        }
+      }
       if (args.storageQuotaMB !== undefined) {
         init.push(`navigator.storage.estimate=async()=>({quota:${args.storageQuotaMB * 1024 * 1024},usage:0});`);
       }
@@ -71,6 +90,7 @@ export const cloakStealthTools: ToolHandler[] = [
           ? "Compiled-in stealth flags only take effect on next launch. Call browser_close, then any tool to relaunch with the new flags."
           : "Runtime overrides applied to context.",
       };
+      if (uaNotice) summary.notice += uaNotice;
       if (requiresRelaunch) {
         const env = process.env as Record<string, string>;
         env.CLOAK_PENDING_ARGS = JSON.stringify(flags);
